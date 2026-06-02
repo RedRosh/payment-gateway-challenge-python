@@ -6,15 +6,19 @@ authors = ["Author <author@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.11"
 uvicorn = "^0.17.6"
 gunicorn = "^20.1.0"
-fastapi = "^0.103.2"
+fastapi = "^0.136.3"
+returns = "^0.27.0"
+
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^6.2.4"
+pytest = "^8.0.0"
 requests = "^2.31.0"
 httpx = "^0.25.0"
+python-dateutil = "^2.9.0.post0"
+httpx2 = "^2.3.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
