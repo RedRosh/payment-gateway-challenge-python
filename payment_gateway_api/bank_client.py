@@ -1,7 +1,9 @@
 import requests
 import logging
 
-from returns.result import Success, Failure, Result
+from returns.result import safe, ResultE
+from returns.pipeline import flow
+from returns.pointfree import bind
 
 from payment_gateway_api.models import PaymentResult, PaymentStatus
 from payment_gateway_api.serializers import CardPayment
@@ -11,28 +13,26 @@ logger = logging.getLogger(__name__)
 BANK_URL = "http://localhost:8080"
 
 
-def build_bank_payload(card_payment: CardPayment) -> Result[dict, str]:
-    payload = {
+@safe
+def build_bank_payload(card_payment: CardPayment) -> dict:
+    return {
         "card_number": card_payment.card_number,
         "expiry_date": card_payment.expiry_date,
         "currency": card_payment.currency,
         "amount": card_payment.amount,
         "cvv": card_payment.cvv,
     }
-    return Success(payload)
 
 
-def send_to_bank(payload: dict) -> Result[dict, str]:
-    try:
-        response = requests.post(f"{BANK_URL}/payments", json=payload)
-        response.raise_for_status()
-        return Success({"payload": payload, "bank_response": response.json()})
-    except Exception as e:
-        logger.error(f"Bank request failed: {e}")
-        return Failure(f"Bank unavailable: {e}")
+@safe
+def send_to_bank(payload: dict) -> dict:
+    response = requests.post(f"{BANK_URL}/payments", json=payload)
+    response.raise_for_status()
+    return {"payload": payload, "bank_response": response.json()}
 
 
-def to_payment_result(ctx: dict) -> Result[PaymentResult, str]:
+@safe
+def to_payment_result(ctx: dict) -> PaymentResult:
     payload = ctx["payload"]
     bank_response = ctx["bank_response"]
 
@@ -42,7 +42,7 @@ def to_payment_result(ctx: dict) -> Result[PaymentResult, str]:
         else PaymentStatus.DECLINED
     )
 
-    result = PaymentResult(
+    return PaymentResult(
         status=status,
         last_four_card_digits=payload["card_number"][-4:],
         expiry_month=int(payload["expiry_date"].split("/")[0]),
@@ -50,12 +50,12 @@ def to_payment_result(ctx: dict) -> Result[PaymentResult, str]:
         currency=payload["currency"],
         amount=payload["amount"],
     )
-    return Success(result)
 
 
-def process_payment(card_payment: CardPayment) -> Result[PaymentResult, str]:
-    return (
-        build_bank_payload(card_payment)
-        .bind(send_to_bank)
-        .bind(to_payment_result)
+def process_payment(card_payment: CardPayment) -> ResultE[PaymentResult]:
+    return flow(
+        card_payment,
+        build_bank_payload,
+        bind(send_to_bank),
+        bind(to_payment_result),
     )
